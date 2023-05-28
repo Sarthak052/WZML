@@ -5,27 +5,28 @@ from urllib.parse import quote as q
 from random import choice as rchoice
 from os import path as ospath, remove as osremove, execl as osexecl
 from subprocess import run as srun, check_output
-from datetime import datetime, timedelta
+from datetime import datetime
 from psutil import disk_usage, cpu_percent, swap_memory, cpu_count, virtual_memory, net_io_counters, boot_time
 from time import time
 from sys import executable
-from telegram import ParseMode
-from telegram.ext import CommandHandler
 from pytz import timezone
-from bot import *
-from .helper.ext_utils.fs_utils import start_cleanup, clean_all, exit_clean_up
-from .helper.ext_utils.telegraph_helper import telegraph
+from telegram.ext import CommandHandler
+
 from .helper.ext_utils.bot_utils import get_readable_file_size, get_readable_time
 from .helper.ext_utils.db_handler import DbManger
+from .helper.ext_utils.fs_utils import start_cleanup, clean_all, exit_clean_up
+from .helper.ext_utils.telegraph_helper import telegraph
 from .helper.telegram_helper.bot_commands import BotCommands
-from .helper.telegram_helper.message_utils import sendMessage, sendMarkup, editMessage, sendLogFile, sendPhoto
+from .helper.telegram_helper.message_utils import sendMessage, editMessage, sendLogFile, sendPhoto
 from .helper.telegram_helper.filters import CustomFilters
 from .helper.telegram_helper.button_build import ButtonMaker
-from bot.modules.wayback import getRandomUserAgent
+from bot import config_dict, botStartTime, Interval, QbInterval, LOGGER, DATABASE_URL, bot, dispatcher, updater, IGNORE_PENDING_REQUESTS, \
+                app, main_loop
 from .modules import authorize, list, cancel_mirror, mirror_status, mirror_leech, clone, ytdlp, shell, eval, bot_settings, \
                      delete, count, users_settings, search, rss, wayback, speedtest, anilist, imdb, bt_select, mediainfo, hash, \
-                     scraper, pictures
-from datetime import datetime
+                     scraper, pictures, save_msg, sel_cat, users, drive_clean, broadcast
+
+version = "Master Branch 5.0.3"
 
 def progress_bar(percentage):
     p_used = config_dict['FINISHED_PROGRESS_STR']
@@ -47,10 +48,10 @@ now=datetime.now(timezone(f'{timez}'))
 def stats(update, context):
     if ospath.exists('.git'):
         if config_dict['EMOJI_THEME']:
-            last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n<b>├</b> 🛠<b>From:</b> %cr'"], shell=True).decode()
+            last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n🛠 From: %cr'"], shell=True).decode()
             botVersion = check_output(["git log -1 --date=format:v%y.%m%d.%H%M --pretty=format:%cd"], shell=True).decode()
         else:
-            last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \n<b>├  From:</b> %cr'"], shell=True).decode()
+            last_commit = check_output(["git log -1 --date=short --pretty=format:'%cd \nFrom: %cr'"], shell=True).decode()
             botVersion = check_output(["git log -1 --date=format:v%y.%m%d.%H%M --pretty=format:%cd"], shell=True).decode()
     else:
         botVersion = 'No UPSTREAM_REPO'
@@ -77,28 +78,30 @@ def stats(update, context):
     mem_a = get_readable_file_size(memory.available)
     mem_u = get_readable_file_size(memory.used)
     if config_dict['EMOJI_THEME']:
-            stats = f'<b>╭─《🌐 BOT STATISTICS 🌐》</b>\n' \
-                    f'<b>├ 🛠 Updated On: </b>{last_commit}\n'\
-                    f'<b>├ ⌛ Uptime: </b>{currentTime}\n'\
-                    f'<b>├ 🟢 OS Uptime: </b>{osUptime}\n'\
-                    f'<b>├ 🖥️ CPU:</b> [{progress_bar(cpuUsage)}] {cpuUsage}%\n'\
-                    f'<b>├ 🎮 RAM:</b> [{progress_bar(mem_p)}] {mem_p}%\n'\
-                    f'<b>├ 💾 Disk:</b> [{progress_bar(disk)}] {disk}%\n'\
-                    f'<b>├ 💿 Disk Free:</b> {free}\n'\
-                    f'<b>├ 🔺 Upload Data:</b> {sent}\n'\
-                    f'<b>╰ 🔻 Download Data:</b> {recv}\n\n'
+            stats = f'<b>       📊 Bot Statistics </b>\n' \
+                    f'🛠 Updated On: {last_commit}\n'\
+                    f'⏰️ Uptime: {currentTime}\n'\
+                    f'🤖 Version: {version}\n'\
+                    f'🟢 OS Uptime: {osUptime}\n'\
+                    f'🖥︄ CPU: [{progress_bar(cpuUsage)}] {cpuUsage}%\n'\
+                    f'🎮 RAM: [{progress_bar(mem_p)}] {mem_p}%\n'\
+                    f'💾 Disk: [{progress_bar(disk)}] {disk}%\n'\
+                    f'💿 Disk Free: {free}\n'\
+                    f'🔺 Upload Data: {sent}\n'\
+                    f'🔻 Download Data: {recv}\n\n'
 
     else:
-            stats = f'<b>╭─《🌐 BOT STATISTICS 🌐》</b>\n' \
-                    f'<b>├  Updated On: </b>{last_commit}\n'\
-                    f'<b>├  Uptime: </b>{currentTime}\n'\
-                    f'<b>├  OS Uptime: </b>{osUptime}\n'\
-                    f'<b>├  CPU:</b> [{progress_bar(cpuUsage)}] {cpuUsage}%\n'\
-                    f'<b>├  RAM:</b> [{progress_bar(mem_p)}] {mem_p}%\n'\
-                    f'<b>├  Disk:</b> [{progress_bar(disk)}] {disk}%\n'\
-                    f'<b>├  Disk Free:</b> {free}\n'\
-                    f'<b>├  Upload Data:</b> {sent}\n'\
-                    f'<b>╰  Download Data:</b> {recv}\n\n'
+            stats = f'<b>    📊 Bot Statistics </b>\n' \
+                    f'Updated On: {last_commit}\n'\
+                    f'Uptime: {currentTime}\n'\
+                    f'Version: {version}\n'\
+                    f'OS Uptime: {osUptime}\n'\
+                    f'CPU: [{progress_bar(cpuUsage)}] {cpuUsage}%\n'\
+                    f'RAM: [{progress_bar(mem_p)}] {mem_p}%\n'\
+                    f'Disk: [{progress_bar(disk)}] {disk}%\n'\
+                    f'Disk Free: {free}\n'\
+                    f'Upload Data: {sent}\n'\
+                    f'Download Data: {recv}\n\n'
 
 
 
@@ -121,34 +124,34 @@ def stats(update, context):
         user_task = 'No Limit Set' if USER_TASKS_LIMIT == '' else f'{USER_TASKS_LIMIT} Tasks/user'
 
         if config_dict['EMOJI_THEME']: 
-            stats += f'<b>╭─《 ⚠️ BOT LIMITS ⚠️ 》</b>\n'\
-                     f'<b>├ 🧲 Torrent/Direct: </b>{torrent_direct}\n'\
-                     f'<b>├ 🔐 Zip/Unzip: </b>{zip_unzip}\n'\
-                     f'<b>├ 🔷 Leech: </b>{leech_limit}\n'\
-                     f'<b>├ ♻️ Clone: </b>{clone_limit}\n'\
-                     f'<b>├ 🔰 Mega: </b>{mega_limit}\n'\
-                     f'<b>├ 💣 Total Tasks: </b>{total_task}\n'\
-                     f'<b>╰ 🔫 User Tasks: </b>{user_task}\n\n'
+            stats += f'<b>🔢 Bot Limitations </b>\n'\
+                     f'🧲 Torrent/Direct: {torrent_direct}\n'\
+                     f'🔐 Zip/Unzip: {zip_unzip}\n'\
+                     f'🔷 Leech: {leech_limit}\n'\
+                     f'♻️ Clone: {clone_limit}\n'\
+                     f'🔰 Mega: {mega_limit}\n'\
+                     f'💣 Total Tasks: {total_task}\n'\
+                     f'🔫 User Tasks: {user_task}\n\n'
         else: 
-            stats += f'<b>╭─《 ⚠️ BOT LIMITS ⚠️ 》</b>\n'\
-                     f'<b>├  Torrent/Direct: </b>{torrent_direct}\n'\
-                     f'<b>├  Zip/Unzip: </b>{zip_unzip}\n'\
-                     f'<b>├  Leech: </b>{leech_limit}\n'\
-                     f'<b>├  Clone: </b>{clone_limit}\n'\
-                     f'<b>├  Mega: </b>{mega_limit}\n'\
-                     f'<b>├  Total Tasks: </b>{total_task}\n'\
-                     f'<b>╰  User Tasks: </b>{user_task}\n\n'
+            stats += f'<b>🔢 Bot Limitations </b>\n'\
+                     f'Torrent/Direct: {torrent_direct}\n'\
+                     f'Zip/Unzip: {zip_unzip}\n'\
+                     f'Leech: {leech_limit}\n'\
+                     f'Clone: {clone_limit}\n'\
+                     f'Mega: {mega_limit}\n'\
+                     f'Total Tasks: {total_task}\n'\
+                     f'User Tasks: {user_task}\n\n'
 
-    if PICS:
-        sendPhoto(stats, context.bot, update.message, rchoice(PICS))
+    if config_dict['PICS']:
+        sendPhoto(stats, context.bot, update.message, rchoice(config_dict['PICS']))
     else:
         sendMessage(stats, context.bot, update.message)
 
 def start(update, context):
     buttons = ButtonMaker()
     if config_dict['EMOJI_THEME']:
-        buttons.buildbutton(f"😎 {config_dict['START_BTN1_NAME']}", f"{config_dict['START_BTN1_URL']}")
-        buttons.buildbutton(f"🔥 {config_dict['START_BTN2_NAME']}", f"{START_BTN2_URL}")
+        buttons.buildbutton(f"{config_dict['START_BTN1_NAME']}", f"{config_dict['START_BTN1_URL']}")
+        buttons.buildbutton(f"{config_dict['START_BTN2_NAME']}", f"{config_dict['START_BTN2_URL']}")
     else:
         buttons.buildbutton(f"{config_dict['START_BTN1_NAME']}", f"{config_dict['START_BTN1_URL']}")
         buttons.buildbutton(f"{config_dict['START_BTN2_NAME']}", f"{config_dict['START_BTN2_URL']}")
@@ -157,20 +160,20 @@ def start(update, context):
         start_string = f'''This bot can mirror all your links to Google Drive!
 Type /{BotCommands.HelpCommand} to get a list of available commands
 '''
-        if PICS:
-            sendPhoto(start_string, context.bot, update.message, rchoice(PICS), reply_markup)
+        if config_dict['PICS']:
+            sendPhoto(start_string, context.bot, update.message, rchoice(config_dict['PICS']), reply_markup)
         else:
-            sendMarkup(start_string, context.bot, update.message, reply_markup)
+            sendMessage(start_string, context.bot, update.message, reply_markup)
     else:
         text = f"Not Authorized user, deploy your own mirror bot"
-        if PICS:
-            sendPhoto(text, context.bot, update.message, rchoice(PICS), reply_markup)
+        if config_dict['PICS']:
+            sendPhoto(text, context.bot, update.message, rchoice(config_dict['PICS']), reply_markup)
         else:
-            sendMarkup(text, context.bot, update.message, reply_markup)
+            sendMessage(text, context.bot, update.message, reply_markup)
 
 
 def restart(update, context):
-    restart_message = sendMessage("Restarting...", context.bot, update.message)
+    restart_message = sendMessage("Bot Restarting...", context.bot, update.message)
     if Interval:
         Interval[0].cancel()
         Interval.clear()
@@ -189,7 +192,7 @@ def restart(update, context):
 def ping(update, context):
     if config_dict['EMOJI_THEME']:
         start_time = int(round(time() * 1000))
-        reply = sendMessage("Starting_Ping ⛔", context.bot, update.message)
+        reply = sendMessage("Starting_Ping", context.bot, update.message)
         end_time = int(round(time() * 1000))
         editMessage(f'{end_time - start_time} ms 🔥', reply)
     else:
@@ -318,11 +321,11 @@ def bot_help(update, context):
     button = ButtonMaker()
     if config_dict['EMOJI_THEME']:
         button.buildbutton("👤 User", f"https://telegra.ph/{help_user}")
-        button.buildbutton("🛡️ Admin", f"https://telegra.ph/{help_admin}")
+        button.buildbutton("🔰 Admin", f"https://telegra.ph/{help_admin}")
     else:
         button.buildbutton("User", f"https://telegra.ph/{help_user}")
         button.buildbutton("Admin", f"https://telegra.ph/{help_admin}")
-    sendMarkup(help_string, context.bot, update.message, button.build_menu(2))
+    sendMessage(help_string, context.bot, update.message, button.build_menu(2))
 
 
 if config_dict['SET_BOT_COMMANDS']:
@@ -361,21 +364,24 @@ if config_dict['SET_BOT_COMMANDS']:
         (f'{BotCommands.PingCommand}','Ping the bot'),
         (f'{BotCommands.RestartCommand}','Restart the bot'),
         (f'{BotCommands.LogCommand}','Get the bot Log'),
-        (f'{BotCommands.HelpCommand}','Get detailed help')
+        (f'{BotCommands.HelpCommand}','Get detailed help'),
+        (f'{BotCommands.LimitCommand}','Get Bot Limitation')
     ]
 
 
 def main():
-
-    version = "4.3.0"
-
+    try:
+        bot.sendMessage(chat_id=config_dict['OWNER_ID'], text="I am now online 🌐")
+    except:
+        pass
+        
     if config_dict['WALLCRAFT_CATEGORY']:
         for page in range(1,20):
             r2 = rget(f"https://wallpaperscraft.com/catalog/{config_dict['WALLCRAFT_CATEGORY']}/1280x720/page{page}")
             soup2 = BeautifulSoup(r2.text, "html.parser")
             x = soup2.select('img[src^="https://images.wallpaperscraft.com/image/single"]')
             for img in x:
-              PICS.append((img['src']).replace("300x168", "1280x720"))
+              config_dict['PICS'].append((img['src']).replace("300x168", "1280x720"))
 
     if config_dict['WALLTIP_SEARCH']:
         for page in range(1,3):
@@ -386,7 +392,7 @@ def main():
             imgsrc = [x.find('img') for x in aTag]
             scrList =  [img['data-original'] for img in imgsrc]
             for o in scrList:
-                PICS.append(o)
+                config_dict['PICS'].append(o)
 
     if config_dict['WALLFLARE_SEARCH']:
         try:
@@ -395,7 +401,7 @@ def main():
                 soup2 = BeautifulSoup(r2.text, "html.parser")
                 x = soup2.select('img[data-src^="https://c4.wallpaperflare.com/wallpaper"]')  
                 for img in x:
-                    PICS.append(img['data-src'])
+                    config_dict['PICS'].append(img['data-src'])
         except Exception as err:
             LOGGER.info(f"WallFlare Error: {err}")
 
@@ -408,7 +414,7 @@ def main():
             jdata = resp.json()
             for x in range(0, 200):
                 largeImageURL = jdata['hits'][x]['largeImageURL']
-                PICS.append(largeImageURL)
+                config_dict['PICS'].append(largeImageURL)
         except Exception as err:
             LOGGER.info(f"Pixabay API Error: {err}")
 
@@ -424,40 +430,41 @@ def main():
                 if ospath.isfile(".restartmsg"):
                     with open(".restartmsg") as f:
                         chat_id, msg_id = map(int, f)
-                    msg = f"😎 Restarted Successfully❗\n"
+                    msg = f"Bot Restarted Successfully❗\n"
                 else:
-                    msg = f"😎 Bot Restarted!\n"
-                msg += f"📅 DATE: {date}\n"
-                msg += f"⌚ TIME: {time}\n"
-                msg += f"🌐 TIMEZONE: {timez}\n"
-                msg += f"🤖 VERSION: {version}"
-
+                    msg = f"Bot Restarted!\n"
+                msg += f"Date: {date}\n"
+                msg += f"Time: {time}\n"
+                msg += f"Time Zone: {timez}\n"
+                msg += f"Repo Version: {version}\n\n"
+                msg += f"Incomplete Tasks ⬇️ \n"
+                
                 for tag, links in data.items():
                     msg += f"\n{tag}: "
                     for index, link in enumerate(links, start=1):
                         msg += f" <a href='{link}'>{index}</a> |"
                         if len(msg.encode()) > 4000:
-                            if '😎 Restarted Successfully❗' in msg and cid == chat_id:
+                            if 'Bot Restarted Successfully❗' in msg and cid == chat_id:
                                 try:
-                                    bot.editMessageText(msg, chat_id, msg_id, parse_mode='HTML', disable_web_page_preview=True)
+                                    bot.editMessageText(msg, chat_id, msg_id)
                                 except:
                                     pass
                                 osremove(".restartmsg")
                             else:
                                 try:
-                                    bot.sendMessage(cid, msg, parse_mode='HTML', disable_web_page_preview=True)
+                                    bot.sendMessage(cid, msg)
                                 except Exception as e:
                                     LOGGER.error(e)
                             msg = ''
-                if '😎 Restarted Successfully❗' in msg and cid == chat_id:
+                if 'Bot Restarted Successfully❗' in msg and cid == chat_id:
                     try:
-                        bot.editMessageText(msg, chat_id, msg_id, parse_mode='HTML', disable_web_page_preview=True)
+                        bot.editMessageText(msg, chat_id, msg_id)
                     except:
                         pass
                     osremove(".restartmsg")
                 else:
                     try:
-                        bot.sendMessage(cid, msg, parse_mode='HTML', disable_web_page_preview=True)
+                        bot.sendMessage(cid, msg)
                     except Exception as e:
                         LOGGER.error(e)
 
@@ -465,29 +472,29 @@ def main():
         with open(".restartmsg") as f:
             chat_id, msg_id = map(int, f)
         try:
-            msg = f"😎 Restarted Successfully❗\n"
-            msg += f"📅 DATE: {date}\n"
-            msg += f"⌚ TIME: {time}\n"
-            msg += f"🌐 TIMEZONE: {timez}\n"
-            msg += f"🤖 VERSION: {version}"            
+            msg = f"Bot Restarted Successfully❗\n"
+            msg += f"Date: {date}\n"
+            msg += f"Time: {time}\n"
+            msg += f"Time Zone: {timez}\n"
+            msg += f"Repo Version: {version}"            
             bot.edit_message_text(msg, chat_id, msg_id)
         except Exception as e:
             LOGGER.info(e)
         osremove(".restartmsg")
 
+     
 
-
-    start_handler = CommandHandler(BotCommands.StartCommand, start, run_async=True)
+    start_handler = CommandHandler(BotCommands.StartCommand, start)
     log_handler = CommandHandler(BotCommands.LogCommand, log,
-                               filters=CustomFilters.owner_filter | CustomFilters.sudo_user, run_async=True)
+                               filters=CustomFilters.owner_filter | CustomFilters.sudo_user)
     restart_handler = CommandHandler(BotCommands.RestartCommand, restart,
-                               filters=CustomFilters.owner_filter | CustomFilters.sudo_user, run_async=True)
+                               filters=CustomFilters.owner_filter | CustomFilters.sudo_user)
     ping_handler = CommandHandler(BotCommands.PingCommand, ping,
-                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user, run_async=True)
+                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user)
     help_handler = CommandHandler(BotCommands.HelpCommand, bot_help,
-                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user, run_async=True)
+                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user)
     stats_handler = CommandHandler(BotCommands.StatsCommand, stats,
-                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user, run_async=True)
+                               filters=CustomFilters.authorized_chat | CustomFilters.authorized_user)
 
 
     dispatcher.add_handler(start_handler)
@@ -497,7 +504,7 @@ def main():
     dispatcher.add_handler(stats_handler)
     dispatcher.add_handler(log_handler)
     updater.start_polling(drop_pending_updates=IGNORE_PENDING_REQUESTS)
-    LOGGER.info("💥𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝❗")
+    LOGGER.info("💥 𝐁𝐨𝐭 𝐒𝐭𝐚𝐫𝐭𝐞𝐝")
     signal(SIGINT, exit_clean_up)
 
 app.start()
